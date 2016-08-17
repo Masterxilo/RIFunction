@@ -1,8 +1,7 @@
-<<numerics`
-<<RVarval`
-<<cform`
+BeginPackage["RIFunction`", {"paul`", "PackageDeveloper`", "FiniteMapping`", "numerics`", "cform`", "RVarval`", "SymbolicC`"}]
 
-ClearAll["RIFunction*"]
+ClearAll["RIFunction`*","RIFunction`Private`*"]
+
 (* -- Purpose -- *)
 (*
 Represent
@@ -156,6 +155,41 @@ RIFunction[Constant, inputs_List, output_RVarval]
   where the returned object is always the same.
 *)
 
+
+PublicSymbols[
+  RIFunction
+, RIFunctionMakeConstant
+, RIFunctionMakePaired
+, RIFunctionMakeRepeated
+, RIFunctionMakeFromExpressionList
+, RIFunctionMakeSelector
+, RIFunctionMakeComposition
+, RIFunctionOutputs
+,RIFunctionOutputExpressionMap
+, RIFunctionArguments
+, RIFunctionExpressionList
+, RIFunctionEvaluate
+, RIFunctionEvaluateNameless
+, RIFunctionEvaluateDerivative
+, RIFunctionEvaluateDerivativeNameless
+, RIFunctionEvaluateMultiDerivative
+, RIFunctionEvaluateMultiDerivativeNameless
+, RIFunctionMakeMultiDerivative
+, RIFunctionMakeFullJacobian
+, RIFunctionMakeMultiDerivativeIndexed
+, RIFunctionMakeDerivativeIndexed
+  ,RIFunctionMakeDerivative
+, RIFunctionCForm
+, RIFunctionCFormExpressions
+, RIFunctionCFormOutputArrayAssignments
+, RIFunctionCFormIndexedFunction
+, RIFunctionCFormAllDerivativesIndexed
+, RIFunctionCFormAllDerivativesIndexedFunction
+]
+
+
+Begin["`Private`"]
+
 (*TODO Hold expr to stop it from being evaluated when nothiing changed *)
 (*TODO add a way to have named (not just list indexed) outputs *)
 (* Name *)
@@ -167,148 +201,184 @@ RIFunction
 RIFunction~SetAttributes~HoldAllComplete
 
 (* ^^ End ^^ *)
-(* -- Purpose -- *)
-(*
-Create (I -> R) -> (K x J -> R)
-given K, f_k: (I -> R) -> (J -> R) as a FiniteMapping and the definition of pairing x
-*)
 
-RIFunctionMakeConstant[inputs_List, output_RVarval] := RIFunction[Constant, inputs, output]
+DefinePublicFunction[
+RIFunctionMakeConstant[inputs_List, output_RVarval]
+  ,"Create (I -> R) -> (J -> R) where (J -> R) if given by output and cannot be changed"
+  ,RIFunction[Constant, inputs, output]
+];
 
-(* -- Purpose -- *)
-(*
-Create (I -> R) -> (K x J -> R)
-given K, f_k: (I -> R) -> (J -> R) as a FiniteMapping and the definition of pairing x
-*)
 
+DefinePublicFunction[
 RIFunctionMakePaired[fks_FiniteMapping, pairing_ : list] /; FMEvaluateAll@fks~MatchQ~{__RIFunction} &&
     AllEqual[FMEvaluateAll@fks, RIFunctionArguments] &&
-    AllEqual[FMEvaluateAll@fks, RIFunctionOutputs] := RIFunction[Multiple, fks, pairing]
-
-RIFunctionMakePaired[x___] := (Message[RIFunctionMakePaired::error, {"RIFunctionMakePaired called with wrong arguments",x}];$Failed)
+    AllEqual[FMEvaluateAll@fks, RIFunctionOutputs]
+,"Create (I -> R) -> (K x J -> R)
+given K, f_k: (I -> R) -> (J -> R) as a FiniteMapping and the definition of pairing x"
+,RIFunction[Multiple, fks, pairing]
+];
 
 (* ^^ End ^^ *)
 
 (* -- Purpose -- *)
-(*
-  given f: A -> B and P, make
+
+DefinePublicFunction[
+RIFunctionMakeRepeated[f_RIFunction, p_List, pairing_ : list]
+ , "given f: A -> B and P, make
 
     f: P x A -> P x B
 
   where 'x' is defined by pairing_.
 
-  For evaluation, when f is called the variable names are picked apart to yield A again (using RVarvalSlicePairIndexed)
-*)
-RIFunctionMakeRepeated[f_RIFunction, p_List, pairing_ : list] := RIFunction[Repeated, f, p, pairing]
+  For evaluation, when f is called the variable names are picked apart to yield A again (using RVarvalSlicePairIndexed)"
+
+  ,RIFunction[Repeated, f, p, pairing]
+  ];
 
 (* ^^ End ^^ *)
 
 
 (* -- Purpose -- *)
-(*
-Create an RIFunction from an expression list with known "variable" names.
 
-The expression list is assumed to
-evaluate to a numeric vector of constant length for any argument values.
-*)
 
 (* Name *)
 
+DefinePublicFunction[
 RIFunctionMakeFromExpressionList[
-
-(* Arguments *) PatternSequence[]
-
-, expression_List
+  expression_List
 , arguments_List
 
-(* Code *) ] := Module[{}, Null
+(* Code *) ] ,
+  "Create an RIFunction from an expression list with known \"variable\" names.
+
+The expression list is assumed to
+evaluate to a numeric vector of constant length for any argument values."
+  ,Module[{}, Null
 
 ; RIFunction[ExpressionList, expression, arguments]
 
 (* ^^ End ^^ *) ]
+  ];
 
+
+DefinePublicFunction[
 RIFunctionMakeFromExpressionList[
   expression_List
   , arguments_List (* optimization *)
-  , outputs_List] /; outputs == FMMakeListDomainNames@Length@expression := RIFunctionMakeFromExpressionList[expression, arguments];
+  , outputs_List] /; outputs == FMMakeListDomainNames@Length@expression 
+  ,"with user-named arguments"
+  ,RIFunctionMakeFromExpressionList[expression, arguments]
+];
 
+DefinePublicFunction[
 RIFunctionMakeFromExpressionList[
     expression_List
   , arguments_List
-  , outputs_List] := RIFunction[ExpressionList, expression, arguments, outputs];
+  , outputs_List] 
+  , "with user-named outputs"
+  ,  RIFunction[ExpressionList, expression, arguments, outputs]
+  ];
 
-
+DefinePublicFunction[
 RIFunctionMakeComposition[f_RIFunction, g_RIFunction] /; Length@RIFunctionOutputs@g ==
-    Length@RIFunctionArguments@f := RIFunction[Composition, f, g];
+    Length@RIFunctionArguments@f 
+  ,"f°g"
+  ,RIFunction[Composition, f, g]
+];
 
 (* -- Purpose -- *)
 (*
-Create a selector function from injective s: A -> B
+
+*)
+
+(* Name *)
+DefinePublicFunction[
+RIFunctionMakeSelector[
+  s_FiniteMapping?FMInjectiveQ,
+  b_List] 
+  ,"Create a selector function from injective s: A -> B
 
 Note: Since s only stores A and s(A), B, the full set of argument variable names
  must be given explicitly.
 
 A names the output variables, which may be different or the same as the input variables.
 
-The order of b does not matter (TODO verify: doesn't b define how inputs are interpreted?)
-*)
-
-(* Name *)
-
-RIFunctionMakeSelector[
-  s_FiniteMapping?FMInjectiveQ,
-  b_List] := With[{a=FMDomain@s,sa=FMEvaluateAll@s},
+The order of b does not matter (TODO verify: doesn't b define how inputs are interpreted?)"
+  ,With[{a=FMDomain@s,sa=FMEvaluateAll@s},
   {saIndex = Positions[b, sa]}~With~RIFunction[Selector, a, b, saIndex]
 ]
+  ];
 
 (*
-Special constructor, where each a maps to itself: This creates a
 
-e.g. RIFunctionMakeSelector[{y, x}, {x, y}]
-creates the 2 argument function that flips its arguments.
 *)
+
+DefinePublicFunction[
 RIFunctionMakeSelector[
   a_List,
-  b_List] :=
-    RIFunctionMakeSelector[ FiniteMappingMakeFromLists[a,a], b]
+  b_List] 
+  ,"Special constructor, where each a maps to itself: This creates a
+
+e.g. RIFunctionMakeSelector[{y, x}, {x, y}]
+creates the 2 argument function that flips its arguments."
+  ,    RIFunctionMakeSelector[ FiniteMappingMakeFromLists[a,a], b]
+  ];
 
 (* -- Purpose -- *)
 (*
 J
 *)
-
-RIFunctionOutputs[f : RIFunction[ExpressionList, expr_, vars_List,___]] := FMMakeListDomainNames@Length@expr;
-
-RIFunctionOutputs[f : RIFunction[ExpressionList, expr_, vars_List, outputs_List]] := outputs;
-
-RIFunctionOutputs[RIFunction[Selector, a_List, b_List, saIndex_List]] := a;
-
-RIFunctionOutputs[RIFunction[Multiple, components_FiniteMapping, pairing_]] :=
+DefinePublicFunction[
+RIFunctionOutputs[f : RIFunction[ExpressionList, expr_, vars_List,___]] ,"J", FMMakeListDomainNames@Length@expr
+];
+DefinePublicFunction[
+RIFunctionOutputs[f : RIFunction[ExpressionList, expr_, vars_List, outputs_List]] ,"J", outputs
+];
+DefinePublicFunction[
+RIFunctionOutputs[RIFunction[Selector, a_List, b_List, saIndex_List]] ,"J", a
+];
+DefinePublicFunction[
+RIFunctionOutputs[RIFunction[Multiple, components_FiniteMapping, pairing_]] ,"J",
     With[{k = FMDomain@components, is = RIFunctionOutputs /@ FMEvaluateAll@components},
       pairing@@@Flatten[Thread /@
           Transpose@{k, is}, 1]
     ] (* TODO can probably be simplified with Tuples[{}] *)
-
-RIFunctionOutputs[RIFunction[Repeated, f_RIFunction, p_List, pairing_]] := pairing@@@Tuples@{p, RIFunctionOutputs@f}
-RIFunctionOutputs[RIFunction[Constant, inputs_List, output_RVarval]] := RVVVariables@output;
-
-RIFunctionOutputs@RIFunction[Composition, f_RIFunction, g_RIFunction] := RIFunctionOutputs@f;
-
+];
+DefinePublicFunction[
+RIFunctionOutputs[RIFunction[Repeated, f_RIFunction, p_List, pairing_]] ,"J", pairing@@@Tuples@{p, RIFunctionOutputs@f}
+];
+DefinePublicFunction[
+  RIFunctionOutputs[RIFunction[Constant, inputs_List, output_RVarval]] ,"J", RVVVariables@output
+];
+DefinePublicFunction[
+RIFunctionOutputs@RIFunction[Composition, f_RIFunction, g_RIFunction] ,"J", RIFunctionOutputs@f
+];
 (* ^^ End ^^ *)
 
 (* -- Purpose -- *)
 (*
 I
 *)
-RIFunctionArguments@RIFunction[Composition, f_RIFunction, g_RIFunction] := RIFunctionArguments@g;
-RIFunctionArguments[RIFunction[ExpressionList, expr_, vars_List, ___]] := vars;
-RIFunctionArguments[RIFunction[Selector, a_List, b_List, saIndex_List]] := b;
 
-RIFunctionArguments[RIFunction[Multiple, components_FiniteMapping, pairing_]] :=
-    RIFunctionArguments@First@FMEvaluateAll@components; (* TODO surely can be done more efficiently *)
-
-RIFunctionArguments[RIFunction[Repeated, f_RIFunction, p_List, pairing_]] := pairing@@@Tuples@{p, RIFunctionArguments@f}
-RIFunctionArguments[RIFunction[Constant, inputs_List, output_RVarval]] := inputs;
+DefinePublicFunction[
+RIFunctionArguments@RIFunction[Composition, f_RIFunction, g_RIFunction] ,"I", RIFunctionArguments@g
+];
+DefinePublicFunction[
+RIFunctionArguments[RIFunction[ExpressionList, expr_, vars_List, ___]] ,"I", vars
+];
+DefinePublicFunction[
+RIFunctionArguments[RIFunction[Selector, a_List, b_List, saIndex_List]] ,"I", b
+];
+DefinePublicFunction[
+RIFunctionArguments[RIFunction[Multiple, components_FiniteMapping, pairing_]] ,"I",
+    RIFunctionArguments@First@FMEvaluateAll@components (* TODO surely can be done more efficiently *)
+];
+DefinePublicFunction[
+RIFunctionArguments[RIFunction[Repeated, f_RIFunction, p_List, pairing_]] ,"I", pairing@@@Tuples@{p, RIFunctionArguments@f}
+];
+DefinePublicFunction[
+RIFunctionArguments[RIFunction[Constant, inputs_List, output_RVarval]] ,"I", inputs
+];
 
 (* ^^ End ^^ *)
 
@@ -320,43 +390,53 @@ real numbers, evaluates to a NumericVector of length #J
 Note that this loses the names of outputs.
 *)
 
-
-RIFunctionExpressionList@RIFunction[Composition, f_RIFunction, g_RIFunction] :=
-    RIFunctionExpressionList@f /. Thread@Rule[RIFunctionArguments@f, RIFunctionExpressionList@g]; (* re-enforce J argument names *)
-
-RIFunctionExpressionList[RIFunction[ExpressionList, expr_, vars_List,___]] := expr;
-RIFunctionExpressionList[RIFunction[Selector, a_List, b_List, saIndex_List]] := b[[saIndex]];
-RIFunctionExpressionList[RIFunction[Constant, inputs_List, output_RVarval]] := RVVValues@output;
-
-RIFunctionExpressionList[RIFunction[Multiple, components_FiniteMapping, pairing_]] :=
-    Flatten[RIFunctionExpressionList /@ FMEvaluateAll@components, 1];
-
-RIFunctionExpressionList[RIFunction[Repeated, f_RIFunction, ps_List, pairing_]] :=
+DefinePublicFunction[
+RIFunctionExpressionList@RIFunction[Composition, f_RIFunction, g_RIFunction] ,"Return a list of expression that, when all variables in I are defined to real numbers, evaluates to a NumericVector of length #J  Note that this loses the names of outputs.",
+    RIFunctionExpressionList@f /. Thread@Rule[RIFunctionArguments@f, RIFunctionExpressionList@g] (* re-enforce J argument names *)
+];
+DefinePublicFunction[
+RIFunctionExpressionList[RIFunction[ExpressionList, expr_, vars_List,___]] ,"Return a list of expression that, when all variables in I are defined to real numbers, evaluates to a NumericVector of length #J  Note that this loses the names of outputs.", expr
+];
+DefinePublicFunction[
+RIFunctionExpressionList[RIFunction[Selector, a_List, b_List, saIndex_List]] ,"Return a list of expression that, when all variables in I are defined to real numbers, evaluates to a NumericVector of length #J  Note that this loses the names of outputs.", b[[saIndex]]
+];
+DefinePublicFunction[
+RIFunctionExpressionList[RIFunction[Constant, inputs_List, output_RVarval]] ,"Return a list of expression that, when all variables in I are defined to real numbers, evaluates to a NumericVector of length #J  Note that this loses the names of outputs.", RVVValues@output
+];
+DefinePublicFunction[
+RIFunctionExpressionList[RIFunction[Multiple, components_FiniteMapping, pairing_]] ,"Return a list of expression that, when all variables in I are defined to real numbers, evaluates to a NumericVector of length #J  Note that this loses the names of outputs.",
+    Flatten[RIFunctionExpressionList /@ FMEvaluateAll@components, 1]
+];
+DefinePublicFunction[
+RIFunctionExpressionList[RIFunction[Repeated, f_RIFunction, ps_List, pairing_]] ,"Return a list of expression that, when all variables in I are defined to real numbers, evaluates to a NumericVector of length #J  Note that this loses the names of outputs.",
     {el=RIFunctionExpressionList@f}~With~Flatten[
       Table[el /. Thread@Rule[RIFunctionArguments@f, (* TODO this is problematic when variable names are lists because of Listable operations*)
         (* make pair indices*)
         pairing[p,#]&/@RIFunctionArguments@f
-      ], {p,ps}], 1];
+      ], {p,ps}], 1]
+];
 
 (* TODO  -> ability to evaluate symbolically? *)
 
 (* ^^ End ^^ *)
 
 (* -- Purpose -- *)
-(*
-Return a FiniteMapping from output variable names to expressions.
 
-An equivalent RIFunction could be reconstructed from this, albeit less optimized.
-*)
 
-RIFunctionOutputExpressionMap[f_RIFunction] := FiniteMappingMakeFromLists[RIFunctionOutputs@f, RIFunctionExpressionList@f];
+DefinePublicFunction[
+RIFunctionOutputExpressionMap[f_RIFunction]
+  ,"Return a FiniteMapping from output variable names to expressions.
+
+An equivalent RIFunction could be reconstructed from this, albeit less optimized."
+  ,FiniteMappingMakeFromLists[RIFunctionOutputs@f, RIFunctionExpressionList@f]
+];
 
 (* ^^ End ^^ *)
 
 
 (* -- Purpose -- *)
 (*
-f(args)
+
 
 TODO not all arguments need to be specified
 TODO does the order in the RVarval matter?
@@ -368,70 +448,87 @@ TODO some of these could be implemented using the Nameless variant, then adding 
 
 (* Name *)
 
-RIFunctionEvaluate[RIFunction[Composition, f_RIFunction, g_RIFunction], args_RVarval] :=
+DefinePublicFunction[
+RIFunctionEvaluate[RIFunction[Composition, f_RIFunction, g_RIFunction], args_RVarval]
+  ,"f(args)"
+  ,
     (
       f~RIFunctionEvaluate~RVarvalMake[RIFunctionArguments@f, RVVValues@RIFunctionEvaluate[g, args]]
-    );
+    )
+    ];
 
 
-RIFunctionEvaluate[RIFunction[Constant, inputs_List, output_RVarval], _] := output;
+DefinePublicFunction[
+RIFunctionEvaluate[RIFunction[Constant, inputs_List, output_RVarval], _] ,"", output
+];
 
+DefinePublicFunction[
 RIFunctionEvaluate[
 
 (* Arguments *) PatternSequence[]
 
 , f : RIFunction[ExpressionList, expr_, vars_List]
 , args_RVarval
-(* Code *) ] := Module[{}, Null
+(* Code *) ],"", Module[{}, Null
 
 ; RVarvalMake[expr /. RVVAsRules@args] (* TODO compare /. with other ways of inserting values, Block is probably more efficient but error prone? *)
 
 ]
+  ];
 
-
+DefinePublicFunction[
 RIFunctionEvaluate[ f : RIFunction[ExpressionList, expr_, vars_List,outputs_List]
-  , args_RVarval] := Module[{}, Null
+  , args_RVarval] 
+  ,""
+  ,Module[{}, Null
 
 ; RVarvalMake[outputs, expr /. RVVAsRules@args] (* TODO compare /. with other ways of inserting values, Block is probably more efficient but error prone? *)
 
 ]
+  ];
 
 
 (* f(x)(pairing[k, j]) = c_k(x)(j) *)
+
+DefinePublicFunction[
 RIFunctionEvaluate[
 
 (* Arguments *) PatternSequence[]
 
   , f : RIFunction[Multiple, components_FiniteMapping, pairing_]
   , args_RVarval
-(* Code *) ] := With[{k = FMDomain@components},
+(* Code *) ] ,"", With[{k = FMDomain@components},
 
   RVarvalMakePairIndexed[k, #~RIFunctionEvaluate~args & /@ FMEvaluateAll@components, pairing]
 
   ]
+  ];
 
 
 (* select(x)(a) = x(s(a))  *)
+DefinePublicFunction[
 RIFunctionEvaluate[
 
 (* Arguments *) PatternSequence[]
 
   , RIFunction[Selector, a_List, b_List, saIndex_List]
   , args_RVarval
-(* Code *) ] /; RVVLength@args == Length@b := With[{},
+(* Code *) ] /; RVVLength@args == Length@b ,"", With[{},
 
   RVarvalMake[a, RVVLookupByVarIndices[args, saIndex]]
 
 ]
+  ];
 
 
 (* -- Purpose -- *)
 (*
-Evaluate f: P x A -> P x B
+
 *)
 
 (* Name *)
 
+DefinePublicFunction[
 RIFunctionEvaluate                                         [
 
 (* Arguments *)                                            PatternSequence[]
@@ -441,7 +538,8 @@ RIFunctionEvaluate                                         [
 
 (* Conditions *)                                             ] /;
 
-RVVLength@args == Length@ps * Length@RIFunctionArguments@f       :=
+RVVLength@args == Length@ps * Length@RIFunctionArguments@f    
+  ,"Evaluate f: P x A -> P x B",
 
 (* Code *)
 
@@ -458,16 +556,14 @@ RVVLength@args == Length@ps * Length@RIFunctionArguments@f       :=
 
     , pairing
   ]
-
+];
 
 (* ^^ End ^^ *)
 
 
 (* -- Purpose -- *)
 (*
-[f]([args])
 
-all args need to be specified
 *)
 
 (* Name *)
@@ -475,11 +571,18 @@ all args need to be specified
 
 (* TODO allow constructing matrix output *)
 
-RIFunctionEvaluateNameless[RIFunction[Composition, f_RIFunction, g_RIFunction], vals_?NumericVectorQ] :=
+DefinePublicFunction[
+RIFunctionEvaluateNameless[RIFunction[Composition, f_RIFunction, g_RIFunction], vals_?NumericVectorQ] 
+  ,"[f]([args])
+
+all args need to be specified"
+  ,
     (
       f~RIFunctionEvaluateNameless~(g~RIFunctionEvaluateNameless~vals)
-    );
+    )
+    ];
 
+DefinePublicFunction[
 RIFunctionEvaluateNameless[
 
 (* Arguments *) PatternSequence[]
@@ -487,33 +590,40 @@ RIFunctionEvaluateNameless[
   , f : RIFunction[ExpressionList, expr_List, vars_List, ___]
   , vals_?NumericVectorQ
 
-(* Code *) ] /; Length@vals == Length@vars := Module[{}, Null
+(* Code *) ] /; Length@vals == Length@vars,"", Module[{}, Null
 
 ; expr /. Thread@Rule[vars, vals]
 ]
-
+];
+DefinePublicFunction[
 RIFunctionEvaluateNameless[
   RIFunction[Selector, a_List, b_List, saIndex_List]
   , vals_?NumericVectorQ
-] /; Length@vals == Length@b := vals[[saIndex]];
-
+] /; Length@vals == Length@b ,"", vals[[saIndex]]
+];
+DefinePublicFunction[
 RIFunctionEvaluateNameless[
   RIFunction[Multiple, components_FiniteMapping, pairing_]
   , vals_?NumericVectorQ
-] /; Length@vals == Length@RIFunctionArguments@First@FMEvaluateAll@components := Flatten[
+] /; Length@vals == Length@RIFunctionArguments@First@FMEvaluateAll@components ,"",
+  Flatten[
   RIFunctionEvaluateNameless[#, vals] & /@ FMEvaluateAll@components
 
-  ,1];
-
-RIFunctionEvaluateNameless[RIFunction[Constant, inputs_List, output_RVarval], _] := RVVValues@output;
+  ,1]
+];
+DefinePublicFunction[
+RIFunctionEvaluateNameless[RIFunction[Constant, inputs_List, output_RVarval], _] ,"", RVVValues@output
+];
 
 (* -- Purpose -- *)
 (*
-Evaluate f: P x A -> P x B for unnamed arguments (assumed order)
+
 *)
 
 (* Name *)
 
+
+DefinePublicFunction[
 RIFunctionEvaluateNameless                                         [
 
 (* Arguments *)                                            PatternSequence[]
@@ -523,11 +633,13 @@ RIFunctionEvaluateNameless                                         [
 
 (* Conditions *)                                             ] /;
 
-Length@vals == Length@ps * Length@RIFunctionArguments@f       :=
+Length@vals == Length@ps * Length@RIFunctionArguments@f
+  ,"Evaluate f: P x A -> P x B for unnamed arguments (assumed order)",
     Flatten[
       f~RIFunctionEvaluateNameless~# & /@ Partition[vals, Length@RIFunctionArguments@f]
 ,1
 ]
+  ];
 
 
 
@@ -535,11 +647,7 @@ Length@vals == Length@ps * Length@RIFunctionArguments@f       :=
 
 (* -- Purpose -- *)
 (*
-df
---
-dx
 
-d_x f
 *)
 
 (* TODO Check that x is one of Arguments *)
@@ -547,32 +655,56 @@ d_x f
 
 (* TODO this might not always work correctly
 TODO in particular, this does nto yet support named outputs, but none of the methods do except Selector (and thus Composed)...*)
+DefinePublicFunction[
+
 RIFunctionMakeDerivative[
 
 (* Arguments *) PatternSequence[]
 
   , f_RIFunction
   , x_
-(* Code *) ] /; RIFunctionArguments@f~Contains~x := RIFunctionMakeFromExpressionList[
+(* Code *) ] /; RIFunctionArguments@f~Contains~x
+
+  ,"df
+--
+dx
+
+d_x f"
+
+  ,RIFunctionMakeFromExpressionList[
   1. D[RIFunctionExpressionList@f, x]
   , RIFunctionArguments@f
   , RIFunctionOutputs@f] (* TODO instead of creating an FMMakeListDomainNames here and removing it later, don't create it *)
+];
 
+DefinePublicFunction[
+RIFunctionMakeDerivative[f:RIFunction[Constant, inputs_List, output_RVarval], x_] /; RIFunctionArguments@f~Contains~x
 
-RIFunctionMakeDerivative[f:RIFunction[Constant, inputs_List, output_RVarval], x_] /; RIFunctionArguments@f~Contains~x :=
-    {outputzeros = RVarvalMakeConstant[RVVVariables@output, 0.]}~With~RIFunction[Constant, inputs, outputzeros];
+  ,"df
+--
+dx
 
+d_x f"
+
+    ,{outputzeros = RVarvalMakeConstant[RVVVariables@output, 0.]}~With~RIFunction[Constant, inputs, outputzeros]
+  ];
 (*
 
 *)
-RIFunctionMakeDerivative[f:RIFunction[Multiple, components_FiniteMapping, pairing_], x_] /; RIFunctionArguments@f~Contains~x :=
-    {dcomponents = RIFunctionMakeDerivative[#,x]&~FMMapValues~components} ~With~ RIFunction[Multiple, dcomponents, pairing]
 
+DefinePublicFunction[
+RIFunctionMakeDerivative[f:RIFunction[Multiple, components_FiniteMapping, pairing_], x_] /; RIFunctionArguments@f~Contains~x
+  ,"",
+    {dcomponents = RIFunctionMakeDerivative[#,x]&~FMMapValues~components} ~With~ RIFunction[Multiple, dcomponents, pairing]
+];
 (* f: B -> A, where A are selected from B according to saIndex which has no repeated values.
 
 Thus the derivative is a constant vector of length A with a 1. only for x
 *)
-RIFunctionMakeDerivative[f: RIFunction[Selector, a_List, b_List, saIndex_List], x_] /; RIFunctionArguments@f~Contains~x :=
+
+DefinePublicFunction[
+RIFunctionMakeDerivative[f: RIFunction[Selector, a_List, b_List, saIndex_List], x_] /; RIFunctionArguments@f~Contains~x
+  ,"",
 With[{indexOfXInB = First@First@Position[b, x]},
 
     b~RIFunctionMakeConstant~RVarvalMake[a,
@@ -582,26 +714,43 @@ With[{indexOfXInB = First@First@Position[b, x]},
     ]
 
 ]
+  ];
 
 (* -- Purpose -- *)
-(*
-These might be more or less efficient for just evaluating the derivative once or multiple times.
-*)
+
 
 (* TODO indexed variants? *)
+DefinePublicFunction[
+RIFunctionEvaluateDerivative[f_RIFunction, i_, args_RVarval] /; RIFunctionArguments@f~Contains~i
+  ,"These might be more or less efficient for just evaluating the derivative once or multiple times.",
+  RIFunctionMakeDerivative[f, i]~RIFunctionEvaluate~args
+  ];
 
-RIFunctionEvaluateDerivative[f_RIFunction, i_, args_RVarval] /; RIFunctionArguments@f~Contains~i := RIFunctionMakeDerivative[f, i]~RIFunctionEvaluate~args;
-RIFunctionEvaluateMultiDerivative[f_RIFunction, y_List, args_RVarval] /; RIFunctionArguments@f~ContainsAll~y := RIFunctionMakeMultiDerivative[f, y]~RIFunctionEvaluate~args;
+DefinePublicFunction[
+RIFunctionEvaluateMultiDerivative[f_RIFunction, y_List, args_RVarval] /; RIFunctionArguments@f~ContainsAll~y
+  ,"",
+  RIFunctionMakeMultiDerivative[f, y]~RIFunctionEvaluate~args
+  ];
 
+DefinePublicFunction[
+RIFunctionEvaluateDerivativeNameless[f_RIFunction, i_, args_?NumericVectorQ] /; RIFunctionArguments@f~Contains~i
+  ,"",
+    RIFunctionMakeDerivative[f, i]~RIFunctionEvaluateNameless~args
+  ];
 
-RIFunctionEvaluateDerivativeNameless[f_RIFunction, i_, args_?NumericVectorQ] /; RIFunctionArguments@f~Contains~i :=
-    RIFunctionMakeDerivative[f, i]~RIFunctionEvaluateNameless~args;
+DefinePublicFunction[
+RIFunctionEvaluateMultiDerivativeNameless[f_RIFunction, y_List, args_?NumericVectorQ] /; RIFunctionArguments@f~ContainsAll~y
+  ,"",
+    RIFunctionMakeMultiDerivative[f, y]~RIFunctionEvaluateNameless~args
+  ];
 
-RIFunctionEvaluateMultiDerivativeNameless[f_RIFunction, y_List, args_?NumericVectorQ] /; RIFunctionArguments@f~ContainsAll~y  :=
-    RIFunctionMakeMultiDerivative[f, y]~RIFunctionEvaluateNameless~args;
 (* TODO indexed variant *)
+DefinePublicFunction[
+RIFunctionEvaluateDerivative[fg : RIFunction[Composition, f_RIFunction, g_RIFunction],
+  i_,
+  x_RVarval] /; RIFunctionArguments@fg~Contains~i
 
-(* generalized chain rule :
+  ,"generalized chain rule :
 
 Let
 
@@ -617,12 +766,11 @@ d_i h x = sum_j d_j f (g x) * (d_i g x)_j
 Note that 'd_j f (g x)' is a K-vector, d_i g x is a J-vector
 
 this is analoguous to how you would usually multiply the jacobian of f with the derivative vector of g
- (or the jacobian in the -Multiple case)
+ (or the jacobian in the -Multiple case)"
 
-*)
-RIFunctionEvaluateDerivative[fg : RIFunction[Composition, f_RIFunction, g_RIFunction],
-  i_,
-  x_RVarval] /; RIFunctionArguments@fg~Contains~i := Module[{
+
+
+  ,Module[{
   r
   , gx = (g~RIFunctionEvaluate~x)~RVVRename~RIFunctionArguments@f
   , digx = RIFunctionEvaluateDerivative[g, i, x]~RVVRename~RIFunctionArguments@f
@@ -649,14 +797,17 @@ RIFunctionEvaluateDerivative[fg : RIFunction[Composition, f_RIFunction, g_RIFunc
   ]
 (* todo could use evaluate derivative multiple, retrieve a matrix and or do a 'matrix multiplication via RVarval *)
 
+]
 ];
 
-
+DefinePublicFunction[
 RIFunctionEvaluateDerivativeNameless[
   fg : RIFunction[Composition, f_RIFunction, g_RIFunction]
   , i_
   ,x_?NumericVectorQ
-] /; RIFunctionArguments@fg~Contains~i := Module[{
+] /; RIFunctionArguments@fg~Contains~i
+  ,"",
+  Module[{
   r
   , gx = g~RIFunctionEvaluateNameless~x
   , digx = RIFunctionEvaluateDerivativeNameless[g, i, x]},
@@ -680,6 +831,8 @@ RIFunctionEvaluateDerivativeNameless[
     Plus (*RVVPlus in named version *), r
   ]
 (* todo could use evaluate derivative multiple, retrieve a matrix and or do a 'matrix multiplication via RVarval *)
+
+]
 
 ];
 
@@ -709,7 +862,24 @@ select(x)(a) = x(s(a))
 
 (* -- Purpose -- *)
 (*
-For f: (I -> R) -> (J -> R) and I' subset I,
+
+*)
+
+(* Name *)
+
+
+DefinePublicFunction[
+RIFunctionMakeMultiDerivative[
+
+(* Arguments *) PatternSequence[]
+
+  , f_RIFunction
+  , y_List
+  , pairing_ : (Reverse@*list)
+
+(* Code *) ] /; RIFunctionArguments@f~ContainsAll~y
+
+  ,"For f: (I -> R) -> (J -> R) and I' subset I,
 construct
 d_I' f: (I -> R) -> (J x I' -> R)
 
@@ -720,52 +890,52 @@ With
 for all x (multiple derivatives together, jacobian matrix)
 
 By changing pairing, you can index the result differently. The default is (Reverse@*List), to arrive at a
-row-column indexed jacobian matrix with individual derivatives by single variables in columns and gradients in rows.
-*)
+row-column indexed jacobian matrix with individual derivatives by single variables in columns and gradients in rows."
 
-(* Name *)
 
-RIFunctionMakeMultiDerivative[
-
-(* Arguments *) PatternSequence[]
-
-  , f_RIFunction
-  , y_List
-  , pairing_ : (Reverse@*list)
-
-(* Code *) ] /; RIFunctionArguments@f~ContainsAll~y := With[{ (* TODO Fail for y not a sublist of Arguments *)
+  ,With[{ (* TODO Fail for y not a sublist of Arguments *)
   components = FiniteMappingMakeFromLists[y, RIFunctionMakeDerivative[f,#]&/@y]}, Null
 
 ; RIFunction[Multiple, components, pairing]
 
 (* ^^ End ^^ *) ]
-
+];
 (* TODO Indexed version *)
 
-RIFunctionMakeFullJacobian[f_RIFunction] := RIFunctionMakeMultiDerivative[f, RIFunctionArguments@f]
+
+DefinePublicFunction[
+RIFunctionMakeFullJacobian[f_RIFunction] ,"", RIFunctionMakeMultiDerivative[f, RIFunctionArguments@f]
+];
 
 
-RIFunctionMakeMultiDerivativeIndexed[f_RIFunction, y: {__Integer}, pairing_ : (Reverse@*list)] :=
+  DefinePublicFunction[
+RIFunctionMakeMultiDerivativeIndexed[f_RIFunction, y: {__Integer}, pairing_ : (Reverse@*list)] ,"",
     RIFunctionMakeMultiDerivative[f, RIFunctionArguments[f][[y]], pairing]
+  ];
 
 (* -- Purpose -- *)
 (*
-df
---
-dx
 
-where x is specified by index into Arguments
 *)
 
 (* Name *)
 
+
+DefinePublicFunction[
 RIFunctionMakeDerivativeIndexed[
 
 (* Arguments *) PatternSequence[]
 
   , f : RIFunction[ExpressionList, expr_, vars_List, ___]
   , i_Integer
-(* Code *) ] := RIFunctionMakeDerivative[f, RIFunctionArguments[f][[i]] ]
+(* Code *) ] ,
+  "df
+--
+dx
+
+where x is specified by index into Arguments"
+  ,RIFunctionMakeDerivative[f, RIFunctionArguments[f][[i]] ]
+  ];
 
 
 (* -- Purpose -- *)
@@ -779,47 +949,65 @@ RIFunctionCForm;
 
 (* -- Purpose -- *)
 (*
-Produce C code evaluating this function.
 
-C code with variables x[i], 0-based
-
-f(const double* const x, double* out)
 
 *)
 
-RIFunctionCFormExpressions[e_RIFunction] := With[
-    {xrep = RuleMapIndexed[x@CIndex@#2 &, RIFunctionArguments@e]},
-      cform[#, xrep] & /@ RIFunctionExpressionList@e
-  ]
+DefinePublicFunction[
+RIFunctionCFormExpressions[e_RIFunction]
+  ,"Produce C code evaluating this function.
 
-RIFunctionCFormOutputArrayAssignments[e_RIFunction, out_String : "out"] := {
+C code with variables x[i] (x(i), function call - uniformity - you have to define this to an array indexing operation ... TODO), 0-based
+
+f(const double* const x, double* out)"
+  ,With[
+  {xrep = RuleMapIndexed[x@CIndex@#2 & , RIFunctionArguments@e]},
+    cformSymbolic[#, xrep] & /@ RIFunctionExpressionList@e
+  ]
+  ];
+
+DefinePublicFunction[
+RIFunctionCFormOutputArrayAssignments[e_RIFunction, out_String : "out"] ,"", {
     cforms = RIFunctionCFormExpressions@e
   }~With~CBlock[
     CAssign[CArray[out,  CIndex@#2], #1]& ~MapIndexed~ cforms
-  ];
+  ]
+];
 
 (* TODO Allow the user to specify the input-output format more freely,
 or use a general and simple enough format and provide examples of how to write wrappers *)
-RIFunctionCFormIndexedFunction[e_RIFunction, f_String : "f", out_String : "out"] := CFunction[
+
+DefinePublicFunction[
+RIFunctionCFormIndexedFunction[e_RIFunction, f_String : "f", out_String : "out"] ,"", CFunction[
     "void", f, {{{"double", "const", "*", "const"}, "x"}, {"double", out}},
     RIFunctionCFormOutputArrayAssignments[e, out]
-  ];
+  ]
+];
 
-RIFunctionCFormAllDerivativesIndexed[e_RIFunction, out_String : "out", i_String : "i"] :=
-    CSwitch[i,
+
+DefinePublicFunction[
+RIFunctionCFormAllDerivativesIndexed[e_RIFunction, out_String : "out", i_String : "i"] ,"",
+    CSwitch[i, (* TODO CSwitch creates spurious error message StringTrim::strse: String or list of strings expected at position 1 in StringTrim[0]. >> even when used correctly (reported)*)
       Sequence@@Flatten[
         {CIndex@#2, {RIFunctionCFormOutputArrayAssignments[RIFunctionMakeDerivative[e, #1]],CBreak[]}}&
         ~MapIndexed~
         RIFunctionArguments@e
       ,1]
-      ];
+      ]
+    ];
 
 
-RIFunctionCFormAllDerivativesIndexedFunction[e_RIFunction, df_String : "df", out_String : "out", i_String : "i"] :=  CFunction[
+DefinePublicFunction[
+RIFunctionCFormAllDerivativesIndexedFunction[e_RIFunction, df_String : "df", out_String : "out", i_String : "i"] ,"",  CFunction[
   "void", df, {{"int",i},{{"double", "const", "*", "const"}, "x"}, {"double", out}},
   RIFunctionCFormAllDerivativesIndexed[e, out, i]
+]
 ];
 
 (* TODO allow constructing matrix output *)
 
 CIndex[{i_Integer}] := i-1;
+
+End[];
+
+EndPackage[];
