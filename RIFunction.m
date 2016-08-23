@@ -202,38 +202,11 @@ RIFunction~SetAttributes~HoldAllComplete
 
 (* ^^ End ^^ *)
 
-DefinePublicFunction[
-RIFunctionMakeConstant[inputs_List, output_RVarval]
-  ,"Create (I -> R) -> (J -> R) where (J -> R) if given by output and cannot be changed"
-  ,RIFunction[Constant, inputs, output]
-];
-
-
-DefinePublicFunction[
-RIFunctionMakePaired[fks_FiniteMapping, pairing_ : list] /; FMEvaluateAll@fks~MatchQ~{__RIFunction} &&
-    AllEqual[FMEvaluateAll@fks, RIFunctionArguments] &&
-    AllEqual[FMEvaluateAll@fks, RIFunctionOutputs]
-,"Create (I -> R) -> (K x J -> R)
-given K, f_k: (I -> R) -> (J -> R) as a FiniteMapping and the definition of pairing x"
-,RIFunction[Multiple, fks, pairing]
-];
 
 (* ^^ End ^^ *)
 
 (* -- Purpose -- *)
 
-DefinePublicFunction[
-RIFunctionMakeRepeated[f_RIFunction, p_List, pairing_ : list]
- , "given f: A -> B and P, make
-
-    f: P x A -> P x B
-
-  where 'x' is defined by pairing_.
-
-  For evaluation, when f is called the variable names are picked apart to yield A again (using RVarvalSlicePairIndexed)"
-
-  ,RIFunction[Repeated, f, p, pairing]
-  ];
 
 (* ^^ End ^^ *)
 
